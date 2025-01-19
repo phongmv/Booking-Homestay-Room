@@ -21,11 +21,29 @@ const jwtSecret = 'fasefraw4r5r3wq45wdfgw34twdfg';
 const bucket = 'dawid-booking-app';
 
 app.use(express.json());
+app.use('/upload', express.static(__dirname + '/uploads'))
 app.use(cookieParser());
+
+mongoose.connect(process.env.MONGO_URL);
+mongoose.connection.once('open', () => {
+  console.log('MongoDB connection established successfully!')
+})
+
 app.use('/uploads', express.static(__dirname+'/uploads'));
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:3000',
+];
+
 app.use(cors({
   credentials: true,
-  origin: 'http://127.0.0.1:5173',
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
 }));
 
 async function uploadToS3(path, originalFilename, mimetype) {
@@ -48,6 +66,39 @@ async function uploadToS3(path, originalFilename, mimetype) {
   }));
   return `https://${bucket}.s3.amazonaws.com/${newFilename}`;
 }
+
+app.post('/api/upload-by-link', async (req,res) => {
+  const {link} = req.body;
+  const newName = 'photo' + Date.now() + '.jpg';
+  await imageDownloader.image({
+    url: link,
+    dest: __dirname + '/uploads/' + newName,
+  });
+  //@ TODO: can be upgrade upload to S3
+  // const url = await uploadToS3('/tmp/' +newName, newName, mime.lookup('/tmp/' +newName));
+  res.json(newName);
+});
+
+const photosMiddleware = multer({dest:'uploads/'});
+app.post('/api/upload', photosMiddleware.array('photos', 100), async (req,res) => {
+  const uploadedFiles = [];
+  for (let i = 0; i < req.files.length; i++) {
+    const { path, originalname } = req.files[i];
+    const parts = originalname.split('.');
+    const ext = parts[parts.length - 1];
+    const newPath = path.slice('') + '.' + ext;
+    console.log({
+      newPath, ext, parts, originalname, path
+    })
+    fs.renameSync(path, newPath);
+    uploadedFiles.push(newPath.replace('uploads/', ''))
+    // @TO DO: can be upgrade to S3
+    // const {path,originalname: originalName,mimetype} = req.files[i];
+    // const url = await uploadToS3(path, originalName, mimetype);
+    // uploadedFiles.push(url);
+  }
+  res.json(uploadedFiles);
+});
 
 function getUserDataFromReq(req) {
   return new Promise((resolve, reject) => {
@@ -118,29 +169,6 @@ app.get('/api/profile', (req,res) => {
 
 app.post('/api/logout', (req,res) => {
   res.cookie('token', '').json(true);
-});
-
-
-app.post('/api/upload-by-link', async (req,res) => {
-  const {link} = req.body;
-  const newName = 'photo' + Date.now() + '.jpg';
-  await imageDownloader.image({
-    url: link,
-    dest: '/tmp/' +newName,
-  });
-  const url = await uploadToS3('/tmp/' +newName, newName, mime.lookup('/tmp/' +newName));
-  res.json(url);
-});
-
-const photosMiddleware = multer({dest:'/tmp'});
-app.post('/api/upload', photosMiddleware.array('photos', 100), async (req,res) => {
-  const uploadedFiles = [];
-  for (let i = 0; i < req.files.length; i++) {
-    const {path,originalname,mimetype} = req.files[i];
-    const url = await uploadToS3(path, originalname, mimetype);
-    uploadedFiles.push(url);
-  }
-  res.json(uploadedFiles);
 });
 
 app.post('/api/places', (req,res) => {
@@ -218,12 +246,14 @@ app.post('/api/bookings', async (req, res) => {
   });
 });
 
-
-
 app.get('/api/bookings', async (req,res) => {
   mongoose.connect(process.env.MONGO_URL);
   const userData = await getUserDataFromReq(req);
   res.json( await Booking.find({user:userData.id}).populate('place') );
 });
 
-app.listen(4000);
+const PORT = 4000;
+
+app.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
+});
