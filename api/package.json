@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "start": "node server.js",
+    "start": "node index.js",
     "dev": "nodemon --watch . index.js"
   },
   "dependencies": {
