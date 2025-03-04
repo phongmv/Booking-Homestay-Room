@@ -19,8 +19,8 @@ export default function IndexPage() {
               <Image className="rounded-2xl object-cover aspect-square" src={place.photos?.[0]} alt=""/>
             )}
           </div>
-          <h2 className="font-bold">{place.address}</h2>
-          <h3 className="text-sm text-gray-500">{place.title}</h3>
+          <h2 className="font-bold break-words">{place.address}</h2>
+          <h3 className="text-sm text-gray-500 break-words">{place.title}</h3>
           <div className="mt-1">
             <span className="font-bold">${place.price}</span> per night
           </div>
