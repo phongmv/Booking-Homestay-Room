@@ -14,7 +14,12 @@ const fs = require('fs');
 const mime = require('mime-types');
 
 require('dotenv').config();
+
+process.on('uncaughtException', console.error);
+process.on('unhandledRejection', console.error);
+
 const app = express();
+const PORT = 4000;
 
 const bcryptSalt = bcrypt.genSaltSync(10);
 const jwtSecret = 'fasefraw4r5r3wq45wdfgw34twdfg';
@@ -30,44 +35,15 @@ mongoose.connection.once('open', () => {
 })
 
 app.use('/uploads', express.static(__dirname+'/uploads'));
-const allowedOrigins = [
-  'http://localhost:5173',
-  'http://localhost:3000',
-];
+
 
 app.use(cors({
-  credentials: true,
-  origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+  credentials: true, // Allow credentials (cookies)
+  origin: process.env.CLIENT_URL || 'http://127.0.0.1:5173', // Allow requests from this origin
 }));
 
-async function uploadToS3(path, originalFilename, mimetype) {
-  const client = new S3Client({
-    region: 'us-east-1',
-    credentials: {
-      accessKeyId: process.env.S3_ACCESS_KEY,
-      secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
-    },
-  });
-  const parts = originalFilename.split('.');
-  const ext = parts[parts.length - 1];
-  const newFilename = Date.now() + '.' + ext;
-  await client.send(new PutObjectCommand({
-    Bucket: bucket,
-    Body: fs.readFileSync(path),
-    Key: newFilename,
-    ContentType: mimetype,
-    ACL: 'public-read',
-  }));
-  return `https://${bucket}.s3.amazonaws.com/${newFilename}`;
-}
 
-app.post('/api/upload-by-link', async (req,res) => {
+app.post('/api/upload-by-link', createAsyncHandler(async (req,res) => {
   const {link} = req.body;
   const newName = 'photo' + Date.now() + '.jpg';
   await imageDownloader.image({
@@ -77,10 +53,10 @@ app.post('/api/upload-by-link', async (req,res) => {
   //@ TODO: can be upgrade upload to S3
   // const url = await uploadToS3('/tmp/' +newName, newName, mime.lookup('/tmp/' +newName));
   res.json(newName);
-});
+}));
 
 const photosMiddleware = multer({dest:'uploads/'});
-app.post('/api/upload', photosMiddleware.array('photos', 100), async (req,res) => {
+app.post('/api/upload', photosMiddleware.array('photos', 100), createAsyncHandler(async (req,res) => {
   const uploadedFiles = [];
   for (let i = 0; i < req.files.length; i++) {
     const { path, originalname } = req.files[i];
@@ -98,28 +74,11 @@ app.post('/api/upload', photosMiddleware.array('photos', 100), async (req,res) =
     // uploadedFiles.push(url);
   }
   res.json(uploadedFiles);
-});
+}));
 
-function getUserDataFromReq(req) {
-  return new Promise((resolve, reject) => {
-    jwt.verify(req.cookies.token, jwtSecret, {}, async (err, userData) => {
-      if (err) {
-        console.log(err)
-      };
-      resolve(userData);
-    });
-  });
-}
-
-app.get('/api/test', (req,res) => {
-  mongoose.connect(process.env.MONGO_URL);
-  res.json('test ok');
-});
-
-app.post('/api/register', async (req,res) => {
-  mongoose.connect(process.env.MONGO_URL);
+app.post('/api/register', createAsyncHandler(async (req,res) => {
+  await mongoose.connect(process.env.MONGO_URL);
   const {name,email,password} = req.body;
-
   try {
     const userDoc = await User.create({
       name,
@@ -131,32 +90,62 @@ app.post('/api/register', async (req,res) => {
     res.status(422).json(e);
   }
 
-});
+}));
 
-app.post('/api/login', async (req,res) => {
-  mongoose.connect(process.env.MONGO_URL);
-  const {email,password} = req.body;
-  const userDoc = await User.findOne({email});
+app.post('/api/login', createAsyncHandler(async (req, res) => {
+  const { email, password } = req.body;
+  const userDoc = await User.findOne({ email });
   if (userDoc) {
     const passOk = bcrypt.compareSync(password, userDoc.password);
     if (passOk) {
-      jwt.sign({
-        email:userDoc.email,
-        id:userDoc._id
-      }, jwtSecret, {}, (err,token) => {
-        if (err) console.log(err);
-        res.cookie('token', token).json(userDoc);
-      });
+      const token = await new Promise((resolve, reject) =>
+        jwt.sign(
+          { email: userDoc.email, id: userDoc._id },
+          jwtSecret,
+          {},
+          (err, token) => {
+            if (err) {
+              reject(err);
+            } else {
+              resolve(token);
+            }
+          }
+        )
+      );
+      // Set cookie with httpOnly, secure, and maxAge
+      res.cookie('token', token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production', // Use secure in production
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        sameSite: 'none',
+        domain: `localhost:${PORT}`,
+      }).json(userDoc);
     } else {
       res.status(422).json('pass not ok');
     }
   } else {
-    res.json('not found');
+    res.status(404).json('not found');
   }
-});
+}));
 
-app.get('/api/profile', (req,res) => {
-  mongoose.connect(process.env.MONGO_URL);
+function getUserDataFromReq(req) {
+  return new Promise((resolve, reject) => {
+    const {token} = req.cookies;
+    console.log('token', token)
+    jwt.verify(token, jwtSecret, {},  (err, userData) => {
+      if (err) {
+        console.log(err);
+        reject(err);
+      } else {
+        resolve(userData);
+      }
+    });
+  });
+}
+
+
+app.get('/api/profile', createAsyncHandler(async (req,res) => {
+  await mongoose.connect(process.env.MONGO_URL);
   const {token} = req.cookies;
   if (token) {
     jwt.verify(token, jwtSecret, {}, async (err, userData) => {
@@ -167,14 +156,20 @@ app.get('/api/profile', (req,res) => {
   } else {
     res.json(null);
   }
+}));
+
+// Logout route
+app.post('/api/logout', (req, res) => {
+  // Clear the token cookie
+  res.cookie('token', '', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    expires: new Date(0), // Expire immediately
+  }).json(true);
 });
 
-app.post('/api/logout', (req,res) => {
-  res.cookie('token', '').json(true);
-});
-
-app.post('/api/places', (req,res) => {
-  mongoose.connect(process.env.MONGO_URL);
+app.post('/api/places', createAsyncHandler(async (req,res) => {
+  await mongoose.connect(process.env.MONGO_URL);
   const {token} = req.cookies;
   const {
     title,address,addedPhotos,description,price,
@@ -189,25 +184,25 @@ app.post('/api/places', (req,res) => {
     });
     res.json(placeDoc);
   });
-});
+}));
 
-app.get('/api/user-places', (req,res) => {
-  mongoose.connect(process.env.MONGO_URL);
+app.get('/api/user-places', createAsyncHandler(async (req,res) => {
+  await mongoose.connect(process.env.MONGO_URL);
   const {token} = req.cookies;
   jwt.verify(token, jwtSecret, {}, async (err, userData) => {
     const {id} = userData;
     res.json( await Place.find({owner:id}) );
   });
-});
+}));
 
-app.get('/api/places/:id', async (req,res) => {
-  mongoose.connect(process.env.MONGO_URL);
+app.get('/api/places/:id', createAsyncHandler(async (req,res) => {
+  await mongoose.connect(process.env.MONGO_URL);
   const {id} = req.params;
   res.json(await Place.findById(id));
-});
+}));
 
-app.put('/api/places', async (req,res) => {
-  mongoose.connect(process.env.MONGO_URL);
+app.put('/api/places', createAsyncHandler(async (req,res) => {
+ await mongoose.connect(process.env.MONGO_URL);
   const {token} = req.cookies;
   const {
     id, title,address,addedPhotos,description,
@@ -225,37 +220,74 @@ app.put('/api/places', async (req,res) => {
       res.json('ok');
     }
   });
-});
+}));
 
-app.get('/api/places', async (req,res) => {
-  mongoose.connect(process.env.MONGO_URL);
+app.get('/api/places', createAsyncHandler(async (req,res) => {
+  await mongoose.connect(process.env.MONGO_URL);
   res.json( await Place.find() );
-});
+}) );
 
-app.post('/api/bookings', async (req, res) => {
-  mongoose.connect(process.env.MONGO_URL);
-  const userData = await getUserDataFromReq(req);
-  const {
-    place,checkIn,checkOut,numberOfGuests,name,phone,price,
-  } = req.body;
-  Booking.create({
-    place,checkIn,checkOut,numberOfGuests,name,phone,price,
-    user:userData.id,
-  }).then((doc) => {
-    res.json(doc);
-  }).catch((err) => {
-    console.log(err);
+app.post('/api/bookings', createAsyncHandler(async (req, res) => {
+  await mongoose.connect(process.env.MONGO_URL);
+
+  // Extract token from cookies
+  const { token } = req.cookies;
+  if (!token) {
+    return res.status(401).json({ error: 'Unauthorized: No token provided' });
+  }
+
+  // Verify the token and get user data
+  const userData = await new Promise((resolve, reject) => {
+    jwt.verify(token, jwtSecret, {}, (err, userData) => {
+      if (err) {
+        console.error('JWT verification error:', err);
+        reject(err);
+      } else {
+        resolve(userData);
+      }
+    });
   });
-});
 
-app.get('/api/bookings', async (req,res) => {
-  mongoose.connect(process.env.MONGO_URL);
+  // Create the booking
+  const {
+    place, checkIn, checkOut, numberOfGuests, name, phone, price,
+  } = req.body;
+
+  const doc = await Booking.create({
+    place, checkIn, checkOut, numberOfGuests, name, phone, price,
+    user: userData.id,
+  });
+
+  res.json(doc);
+}));
+
+
+app.get('/api/bookings',createAsyncHandler( async (req,res) => {
+  await mongoose.connect(process.env.MONGO_URL);
   const userData = await getUserDataFromReq(req);
-  res.json( await Booking.find({user:userData.id}).populate('place') );
-});
-
-const PORT = 4000;
+  res.json( await Booking.find({ user: userData.id }).populate('place') );
+}));
 
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
+
+/**
+ * @param {import('express').RequestHandler} handler
+ * @returns {import('express').RequestHandler}
+ */
+function createAsyncHandler(handler) {
+  return async (...args) => {
+
+    const [, res] = args;
+    try {
+      return await handler(...args);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({
+        status: 500,
+        error: error.message,
+      });
+    }
+  }
+}

@@ -12,7 +12,7 @@ export default function BookingWidget({place}) {
   const [phone,setPhone] = useState('');
   const [redirect,setRedirect] = useState('');
   const {user} = useContext(UserContext);
-
+  axios.defaults.withCredentials = true;
   useEffect(() => {
     if (user) {
       setName(user.name);
@@ -24,16 +24,34 @@ export default function BookingWidget({place}) {
     numberOfNights = differenceInCalendarDays(new Date(checkOut), new Date(checkIn));
   }
 
+  function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
+  }
+
   async function bookThisPlace() {
+    const token = getCookie('token');
+    if (token) {
+      console.log('Token:', token);
+      // Use the token (e.g., include it in the Authorization header of your requests)
+    } else {
+      console.log('Token cookie not found');
+    }
     const response = await axios.post('/bookings', {
-      checkIn,checkOut,numberOfGuests,name,phone,
-      place:place._id,
-      price:numberOfNights * place.price,
+      checkIn,
+      checkOut,
+      numberOfGuests,
+      name,
+      phone,
+      place: place._id,
+      price: place.price,
+    }, {
+      withCredentials: true, // Include cookies in the request
     });
     const bookingId = response.data._id;
     setRedirect(`/account/bookings/${bookingId}`);
   }
-
   if (redirect) {
     return <Navigate to={redirect} />
   }
@@ -63,8 +81,7 @@ export default function BookingWidget({place}) {
                  value={numberOfGuests}
                  onChange={ev => setNumberOfGuests(ev.target.value)}/>
         </div>
-        {numberOfNights > 0 && (
-          <div className="py-3 px-4 border-t">
+        <div className="py-3 px-4 border-t">
             <label>Your full name:</label>
             <input type="text"
                    value={name}
@@ -73,8 +90,7 @@ export default function BookingWidget({place}) {
             <input type="tel"
                    value={phone}
                    onChange={ev => setPhone(ev.target.value)}/>
-          </div>
-        )}
+        </div>
       </div>
       <button onClick={bookThisPlace} className="primary mt-4">
         Book this place
