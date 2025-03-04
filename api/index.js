@@ -1,3 +1,5 @@
+require('dotenv').config();
+
 const express = require('express');
 const cors = require('cors');
 const mongoose = require("mongoose");
@@ -5,35 +7,29 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('./models/User.js');
 const Place = require('./models/Place.js');
+const Upload = require('./models/Upload.js');
 const Booking = require('./models/Booking.js');
 const cookieParser = require('cookie-parser');
 const imageDownloader = require('image-downloader');
-const {S3Client, PutObjectCommand} = require('@aws-sdk/client-s3');
 const multer = require('multer');
-const fs = require('fs');
-const mime = require('mime-types');
-
-require('dotenv').config();
+const fsPromises = require('fs/promises');
+const mimeTypes = require('mime-types');
 
 process.on('uncaughtException', console.error);
 process.on('unhandledRejection', console.error);
 
 const app = express();
-const PORT = 4000;
+
+const bcryptSalt = bcrypt.genSaltSync(10);
+const jwtSecret = 'fasefraw4r5r3wq45wdfgw34twdfg'; // TODO: Use an environment variable!
+const PORT = 4000; // TODO: Use an environment variable!
 
 /** @type {mongoose.Mongoose} */
 let mongooseInstance;
 
-const bcryptSalt = bcrypt.genSaltSync(10);
-const jwtSecret = 'fasefraw4r5r3wq45wdfgw34twdfg';
-const bucket = 'dawid-booking-app';
-
 app.use(express.json());
-app.use('/upload', express.static(__dirname + '/uploads'))
 app.use(cookieParser());
 
-
-app.use('/uploads', express.static(__dirname+'/uploads'));
 
 const { CLIENT_URL } = process.env;
 app.use(cors({
@@ -44,39 +40,59 @@ app.use(cors({
 
 app.post('/api/upload-by-link', createAsyncHandler(async (req,res) => {
   const {link} = req.body;
-  const newName = 'photo' + Date.now() + '.jpg';
-  await imageDownloader.image({
+
+  const newName = 'photo' + new mongoose.Types.ObjectId().toString() + '.bin';
+  const destinationPath = __dirname + '/uploads/' + newName;
+
+  const { filename } = await imageDownloader.image({
     url: link,
-    dest: __dirname + '/uploads/' + newName,
+    dest: destinationPath,
   });
-  //@ TODO: can be upgrade upload to S3
-  // const url = await uploadToS3('/tmp/' +newName, newName, mime.lookup('/tmp/' +newName));
-  res.json(newName);
+
+  const mimeType = mimeTypes.lookup(filename) || 'application/octet-stream';
+
+  const { _id } = await Upload.create({
+    name: filename,
+    mimeType,
+    blob: await fsPromises.readFile(destinationPath),
+  });
+
+  await fsPromises.unlink(destinationPath);
+
+  res.json(_id.toString());
 }));
 
-const photosMiddleware = multer({dest:'uploads/'});
+const photosMiddleware = multer({ storage: multer.memoryStorage() });
 app.post('/api/upload', photosMiddleware.array('photos', 100), createAsyncHandler(async (req,res) => {
+  /** @type {Express.Multer.File[]} */
+  const files = req.files;
+  /** @type {string[]} */
   const uploadedFiles = [];
-  for (let i = 0; i < req.files.length; i++) {
-    const { path, originalname } = req.files[i];
-    const parts = originalname.split('.');
-    const ext = parts[parts.length - 1];
-    const newPath = path.slice('') + '.' + ext;
-    console.log({
-      newPath, ext, parts, originalname, path
-    })
-    fs.renameSync(path, newPath);
-    uploadedFiles.push(newPath.replace('uploads/', ''))
-    // @TO DO: can be upgrade to S3
-    // const {path,originalname: originalName,mimetype} = req.files[i];
-    // const url = await uploadToS3(path, originalName, mimetype);
-    // uploadedFiles.push(url);
+
+  for (const { originalname, buffer } of files) {
+    const mimeType = mimeTypes.lookup(originalname) || 'application/octet-stream';
+
+    const { _id } = await Upload.create({
+      name: originalname,
+      mimeType,
+      blob: buffer,
+    });
+
+    uploadedFiles.push(_id.toString());
   }
   res.json(uploadedFiles);
 }));
 
+app.get('/uploads/:uploadId', createAsyncHandler(async (req, res) => {
+  const { uploadId } = req.params;
+  const { mimeType, blob } = await Upload.findById(uploadId);
+
+  res
+    .header('Content-Type', mimeType)
+    .end(blob);
+}));
+
 app.post('/api/register', createAsyncHandler(async (req,res) => {
-  await mongoose.connect(process.env.MONGO_URL);
   const {name,email,password} = req.body;
   try {
     const userDoc = await User.create({
@@ -130,6 +146,7 @@ app.post('/api/login', createAsyncHandler(async (req, res) => {
   }
 }));
 
+/** @param {import('express').Request} req */
 function getUserDataFromReq(req) {
   return new Promise((resolve, reject) => {
     const {token} = req.cookies;
@@ -147,17 +164,9 @@ function getUserDataFromReq(req) {
 
 
 app.get('/api/profile', createAsyncHandler(async (req,res) => {
-  await mongoose.connect(process.env.MONGO_URL);
-  const {token} = req.cookies;
-  if (token) {
-    jwt.verify(token, jwtSecret, {}, async (err, userData) => {
-      if (err) console.log(err);
-      const {name,email,_id} = await User.findById(userData.id);
-      res.json({name,email,_id});
-    });
-  } else {
-    res.json(null);
-  }
+  const userData = await getUserDataFromReq(req);
+  const {name,email,_id} = await User.findById(userData.id);
+  res.json({name,email,_id});
 }));
 
 // Logout route
@@ -172,67 +181,57 @@ app.post('/api/logout', (req, res) => {
 });
 
 app.post('/api/places', createAsyncHandler(async (req,res) => {
-  await mongoose.connect(process.env.MONGO_URL);
-  const {token} = req.cookies;
   const {
     title,address,addedPhotos,description,price,
     perks,extraInfo,checkIn,checkOut,maxGuests,
   } = req.body;
-  jwt.verify(token, jwtSecret, {}, async (err, userData) => {
-    if (err) console.log(err);
-    const placeDoc = await Place.create({
-      owner:userData.id,price,
-      title,address,photos:addedPhotos,description,
-      perks,extraInfo,checkIn,checkOut,maxGuests,
-    });
-    res.json(placeDoc);
+
+  const userData = await getUserDataFromReq(req);
+
+  const placeDoc = await Place.create({
+    owner:userData.id,price,
+    title,address,photos:addedPhotos,description,
+    perks,extraInfo,checkIn,checkOut,maxGuests,
   });
+  res.json(placeDoc);
 }));
 
 app.get('/api/user-places', createAsyncHandler(async (req,res) => {
-  await mongoose.connect(process.env.MONGO_URL);
-  const {token} = req.cookies;
-  jwt.verify(token, jwtSecret, {}, async (err, userData) => {
-    const {id} = userData;
-    res.json( await Place.find({owner:id}) );
-  });
+  const userData = await getUserDataFromReq(req);
+  res.json(await Place.find({ owner: userData.id }));
 }));
 
 app.get('/api/places/:id', createAsyncHandler(async (req,res) => {
-  await mongoose.connect(process.env.MONGO_URL);
   const {id} = req.params;
   res.json(await Place.findById(id));
 }));
 
 app.put('/api/places', createAsyncHandler(async (req,res) => {
- await mongoose.connect(process.env.MONGO_URL);
-  const {token} = req.cookies;
+  const userData = await getUserDataFromReq(req);
   const {
     id, title,address,addedPhotos,description,
     perks,extraInfo,checkIn,checkOut,maxGuests,price,
   } = req.body;
-  jwt.verify(token, jwtSecret, {}, async (err, userData) => {
-    if (err) console.log(err);
-    const placeDoc = await Place.findById(id);
-    if (userData.id === placeDoc.owner.toString()) {
-      placeDoc.set({
-        title,address,photos:addedPhotos,description,
-        perks,extraInfo,checkIn,checkOut,maxGuests,price,
-      });
-      await placeDoc.save();
-      res.json('ok');
-    }
-  });
+  const placeDoc = await Place.findById(id);
+  if (userData.id === placeDoc.owner.toString()) {
+    placeDoc.set({
+      title,address,photos:addedPhotos,description,
+      perks,extraInfo,checkIn,checkOut,maxGuests,price,
+    });
+    await placeDoc.save();
+    res.json('ok');
+  } else {
+    res.status(404).json({
+      error: 'No places found',
+    });
+  }
 }));
 
 app.get('/api/places', createAsyncHandler(async (req,res) => {
-  await mongoose.connect(process.env.MONGO_URL);
   res.json( await Place.find() );
 }) );
 
 app.post('/api/bookings', createAsyncHandler(async (req, res) => {
-  await mongoose.connect(process.env.MONGO_URL);
-
   // Extract token from cookies
   const { token } = req.cookies;
   if (!token) {
@@ -266,7 +265,6 @@ app.post('/api/bookings', createAsyncHandler(async (req, res) => {
 
 
 app.get('/api/bookings',createAsyncHandler( async (req,res) => {
-  await mongoose.connect(process.env.MONGO_URL);
   const userData = await getUserDataFromReq(req);
   res.json( await Booking.find({ user: userData.id }).populate('place') );
 }));
@@ -307,4 +305,21 @@ function createAsyncHandler(handler) {
       });
     }
   }
+}
+
+/**
+ * @param {string} token
+ * @param {Parameters<import('jsonwebtoken')['verify']>[1]} secret
+ * @param {import('jsonwebtoken').VerifyOptions} options
+ */
+async function jwtVerifyAsync(token, secret, options) {
+  return new Promise((resolve, reject) => {
+    jwt.verify(token, secret, options, (error, decoded) => {
+      if (error) {
+        reject(error);
+      } else {
+        resolve(decoded);
+      }
+    });
+  });
 }
