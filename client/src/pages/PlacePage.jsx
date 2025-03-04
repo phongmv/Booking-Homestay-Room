@@ -30,7 +30,7 @@ export default function PlacePage() {
         <div>
           <div className="my-4">
             <h2 className="font-semibold text-2xl">Description</h2>
-            {place.description}
+            <div className="whitespace-pre-wrap">{place.description}</div>
           </div>
           Check-in: {place.checkIn}<br />
           Check-out: {place.checkOut}<br />
@@ -44,7 +44,7 @@ export default function PlacePage() {
         <div>
           <h2 className="font-semibold text-2xl">Extra info</h2>
         </div>
-        <div className="mb-4 mt-2 text-sm text-gray-700 leading-5">{place.extraInfo}</div>
+        <div className="mb-4 mt-2 text-sm text-gray-700 leading-5 whitespace-pre-wrap">{place.extraInfo}</div>
       </div>
     </div>
   );
