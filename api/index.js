@@ -21,6 +21,9 @@ process.on('unhandledRejection', console.error);
 const app = express();
 const PORT = 4000;
 
+/** @type {mongoose.Mongoose} */
+let mongooseInstance;
+
 const bcryptSalt = bcrypt.genSaltSync(10);
 const jwtSecret = 'fasefraw4r5r3wq45wdfgw34twdfg';
 const bucket = 'dawid-booking-app';
@@ -29,17 +32,13 @@ app.use(express.json());
 app.use('/upload', express.static(__dirname + '/uploads'))
 app.use(cookieParser());
 
-mongoose.connect(process.env.MONGO_URL);
-mongoose.connection.once('open', () => {
-  console.log('MongoDB connection established successfully!')
-})
 
 app.use('/uploads', express.static(__dirname+'/uploads'));
 
-
+const { CLIENT_URL } = process.env;
 app.use(cors({
   credentials: true, // Allow credentials (cookies)
-  origin: process.env.CLIENT_URL || 'http://127.0.0.1:5173', // Allow requests from this origin
+  origin: CLIENT_URL || 'http://127.0.0.1:5173', // Allow requests from this origin
 }));
 
 
@@ -112,13 +111,16 @@ app.post('/api/login', createAsyncHandler(async (req, res) => {
           }
         )
       );
+
       // Set cookie with httpOnly, secure, and maxAge
       res.cookie('token', token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production', // Use secure in production
+        secure: true,
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
         sameSite: 'none',
-        domain: `localhost:${PORT}`,
+        domain: process.env.NODE_ENV === 'production'
+          ? new URL(CLIENT_URL).host
+          : undefined,
       }).json(userDoc);
     } else {
       res.status(422).json('pass not ok');
@@ -268,9 +270,23 @@ app.get('/api/bookings',createAsyncHandler( async (req,res) => {
   res.json( await Booking.find({ user: userData.id }).populate('place') );
 }));
 
-app.listen(PORT, () => {
+init();
+
+async function init() {
+  mongooseInstance = await mongoose.connect(process.env.MONGO_URL);
+  console.log('MongoDB connection established successfully!');
+
+  await new Promise((resolve, reject) =>
+    app.listen(PORT, error => {
+      if (error) {
+        reject(error);
+      } else {
+        resolve();
+      }
+    }),
+  );
   console.log(`Server running on http://localhost:${PORT}`);
-});
+}
 
 /**
  * @param {import('express').RequestHandler} handler
