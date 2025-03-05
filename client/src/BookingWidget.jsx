@@ -3,6 +3,7 @@ import {differenceInCalendarDays} from "date-fns";
 import axios from "axios";
 import {Navigate} from "react-router-dom";
 import {UserContext} from "./UserContext.jsx";
+import {el} from "date-fns/locale";
 
 export default function BookingWidget({place}) {
   const [checkIn,setCheckIn] = useState('');
@@ -24,34 +25,39 @@ export default function BookingWidget({place}) {
     numberOfNights = differenceInCalendarDays(new Date(checkOut), new Date(checkIn));
   }
 
-  function getCookie(name) {
-    const value = `; ${document.cookie}`;
-    const parts = value.split(`; ${name}=`);
-    if (parts.length === 2) return parts.pop().split(';').shift();
+  async function bookThisPlace() {
+    try {
+      const response = await axios.post('/bookings', {
+        checkIn,
+        checkOut,
+        numberOfGuests,
+        name,
+        phone,
+        place: place._id,
+        price: place.price,
+      }, {
+        withCredentials: true, // Include cookies in the request
+      });
+
+      const bookingId = response.data._id;
+      if (!bookingId) {
+        setRedirect('/login'); // Redirect to login if bookingId is not received
+      } else {
+        setRedirect(`/account/bookings/${bookingId}`); // Redirect to booking details page
+      }
+    } catch (error) {
+      console.error('Booking failed:', error);
+
+      // Check if the error is due to unauthorized access (e.g., 401 status code)
+      if (error.response && error.response.status === 401) {
+        setRedirect('/login'); // Redirect to login page if unauthorized
+      } else {
+        // Handle other errors (e.g., display an error message to the user)
+        alert('Booking failed. Please try again later.');
+      }
+    }
   }
 
-  async function bookThisPlace() {
-    const token = getCookie('token');
-    if (token) {
-      console.log('Token:', token);
-      // Use the token (e.g., include it in the Authorization header of your requests)
-    } else {
-      console.log('Token cookie not found');
-    }
-    const response = await axios.post('/bookings', {
-      checkIn,
-      checkOut,
-      numberOfGuests,
-      name,
-      phone,
-      place: place._id,
-      price: place.price,
-    }, {
-      withCredentials: true, // Include cookies in the request
-    });
-    const bookingId = response.data._id;
-    setRedirect(`/account/bookings/${bookingId}`);
-  }
   if (redirect) {
     return <Navigate to={redirect} />
   }
@@ -92,11 +98,8 @@ export default function BookingWidget({place}) {
                    onChange={ev => setPhone(ev.target.value)}/>
         </div>
       </div>
-      <button onClick={bookThisPlace} className="primary mt-4">
-        Book this place
-        {numberOfNights > 0 && (
-          <span> ${numberOfNights * place.price}</span>
-        )}
+      <button disabled={!checkIn || !checkOut || !numberOfGuests || !name || !phone} onClick={bookThisPlace} className="primary mt-4">
+        Book this room
       </button>
     </div>
   );

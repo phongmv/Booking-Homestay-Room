@@ -23,9 +23,9 @@ export default function PlacesPage() {
         </div>
         <div className="mt-4">
           {places.length > 0 && places.map(place => (
-            <Link to={'/account/places/'+place._id} className="flex cursor-pointer gap-4 bg-gray-100 p-4 rounded-2xl">
-              <div className="flex w-32 h-32 bg-gray-300 grow shrink-0">
-                <PlaceImg place={place} />
+            <Link to={'/account/places/'+place._id} className="flex cursor-pointer gap-4 bg-gray-100 p-4 rounded-2xl m-2">
+              <div className="flex">
+                <PlaceImg className="w-[600px] h-[180px] max-w-[300px]" place={place} />
               </div>
               <div className="grow-0 shrink">
                 <h2 className="text-xl">{place.title}</h2>
