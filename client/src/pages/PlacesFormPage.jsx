@@ -4,6 +4,7 @@ import {useEffect, useState} from "react";
 import axios from "axios";
 import AccountNav from "../AccountNav";
 import {Navigate, useParams} from "react-router-dom";
+import PhoneInput from "../PhoneInput.jsx";
 
 export default function PlacesFormPage() {
   const {id} = useParams();
@@ -21,6 +22,7 @@ export default function PlacesFormPage() {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
+  const [isValidPhone, setIsValidPhone] = useState(true)
   useEffect(() => {
     if (!id) {
       return;
@@ -100,7 +102,7 @@ export default function PlacesFormPage() {
         {preInput('Email', 'Email of the owner of this place')}
         <input required type="email" value={email} onChange={ev => setEmail(ev.target.value)} placeholder="email"/>
         {preInput('Phone', 'Phone of the owner of this place')}
-        <input required type="text" value={phone} onChange={ev => setPhone(ev.target.value)} placeholder="phone"/>
+        <PhoneInput hidePlaceholder={true} isValid={isValidPhone} setIsValid={setIsValidPhone} phone={phone} setPhone={setPhone}/>
         {preInput('Photos','more = better')}
         <PhotosUploader addedPhotos={addedPhotos} onChange={setAddedPhotos} />
         {preInput('Description','description of the place')}

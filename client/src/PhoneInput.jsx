@@ -1,6 +1,6 @@
 import React from 'react';
 
-const PhoneInput = ({phone, setPhone, isValid, setIsValid}) => {
+const PhoneInput = ({phone, setPhone, isValid, setIsValid, hidePlaceholder}) => {
 
   const validatePhoneNumber = (phoneNumber) => {
     // Biểu thức chính quy để kiểm tra số điện thoại Việt Nam
@@ -22,7 +22,7 @@ const PhoneInput = ({phone, setPhone, isValid, setIsValid}) => {
 
   return (
     <div>
-      <label>Phone number:</label>
+      {!hidePlaceholder && <label>Phone number:</label>}
       <input
         type="tel"
         value={phone}

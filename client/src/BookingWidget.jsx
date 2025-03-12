@@ -7,8 +7,18 @@ import PhoneInput from "./PhoneInput.jsx";
 
 export default function BookingWidget({place}) {
 
-  const [checkIn, setCheckIn] = useState('');
-  const [checkOut, setCheckOut] = useState('');
+  const today = () => {
+    return new Date().toISOString().split('T')[0]
+  }
+
+  const tomorrow = () => {
+    const today = new Date();
+    today.setDate(today.getDate() + 1); // Set the date to tomorrow
+    return  today.toISOString().split('T')[0]
+  }
+
+  const [checkIn, setCheckIn] = useState(() => today());
+  const [checkOut, setCheckOut] = useState(() => tomorrow());
 
   const handleCheckInChange = (ev) => {
     const selectedCheckIn = ev.target.value;
@@ -23,7 +33,7 @@ export default function BookingWidget({place}) {
   const [rooms,setRooms] = useState(1);
   const [name,setName] = useState('');
   const [phone,setPhone] = useState('');
-  const [isValid, setIsValid] = useState(false)
+  const [isValid, setIsValid] = useState(true)
 
   const [redirect,setRedirect] = useState('');
   const {user} = useContext(UserContext);
@@ -34,11 +44,7 @@ export default function BookingWidget({place}) {
     }
   }, [user]);
 
-  const tomorrow = () => {
-      const today = new Date();
-      today.setDate(today.getDate() + 1); // Set the date to tomorrow
-      return  today.toISOString().split('T')[0]
-  }
+
 
   async function bookThisPlace() {
     try {
@@ -90,7 +96,7 @@ export default function BookingWidget({place}) {
             <input
               type="date"
               value={checkIn}
-              min={new Date().toISOString().split('T')[0]} // Ngày tối thiểu là hôm nay
+              min={today()} // Ngày tối thiểu là hôm nay
               onChange={handleCheckInChange}
             />
           </div>
