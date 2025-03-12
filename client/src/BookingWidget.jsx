@@ -3,38 +3,48 @@ import {differenceInCalendarDays} from "date-fns";
 import axios from "axios";
 import {Navigate} from "react-router-dom";
 import {UserContext} from "./UserContext.jsx";
-import {el} from "date-fns/locale";
+import PhoneInput from "./PhoneInput.jsx";
 
 export default function BookingWidget({place}) {
-  const [checkIn,setCheckIn] = useState('');
-  const [checkOut,setCheckOut] = useState('');
-  const [numberOfGuests,setNumberOfGuests] = useState(1);
+
+  const [checkIn, setCheckIn] = useState('');
+  const [checkOut, setCheckOut] = useState('');
+
+  const handleCheckInChange = (ev) => {
+    const selectedCheckIn = ev.target.value;
+    setCheckIn(selectedCheckIn);
+
+    // Nếu ngày Check out hiện tại nhỏ hơn ngày Check in mới, đặt lại Check out
+    if (checkOut && checkOut < selectedCheckIn) {
+      setCheckOut(selectedCheckIn);
+    }
+  };
+
+  const [rooms,setRooms] = useState(1);
   const [name,setName] = useState('');
   const [phone,setPhone] = useState('');
+  const [isValid, setIsValid] = useState(false)
+
   const [redirect,setRedirect] = useState('');
   const {user} = useContext(UserContext);
-  axios.defaults.withCredentials = true;
+
   useEffect(() => {
     if (user) {
       setName(user.name);
     }
   }, [user]);
 
-  let numberOfNights = 0;
-  if (checkIn && checkOut) {
-    numberOfNights = differenceInCalendarDays(new Date(checkOut), new Date(checkIn));
-  }
 
   async function bookThisPlace() {
     try {
       const response = await axios.post('/bookings', {
         checkIn,
         checkOut,
-        numberOfGuests,
         name,
         phone,
         place: place._id,
         price: place.price,
+        rooms
       }, {
         withCredentials: true, // Include cookies in the request
       });
@@ -62,6 +72,7 @@ export default function BookingWidget({place}) {
     return <Navigate to={redirect} />
   }
 
+
   return (
     <div className="bg-white shadow p-4 rounded-2xl">
       <div className="text-2xl text-center">
@@ -71,34 +82,40 @@ export default function BookingWidget({place}) {
         <div className="flex">
           <div className="py-3 px-4">
             <label>Check in:</label>
-            <input type="date"
-                   value={checkIn}
-                   onChange={ev => setCheckIn(ev.target.value)}/>
+            <input
+              type="date"
+              value={checkIn}
+              min={new Date().toISOString().split('T')[0]} // Ngày tối thiểu là hôm nay
+              onChange={handleCheckInChange}
+            />
           </div>
           <div className="py-3 px-4 border-l">
             <label>Check out:</label>
-            <input type="date" value={checkOut}
-                   onChange={ev => setCheckOut(ev.target.value)}/>
+            <input
+              type="date"
+              value={checkOut}
+              min={checkIn} // Ngày tối thiểu là ngày Check in
+              onChange={ev => setCheckOut(ev.target.value)}
+            />
           </div>
         </div>
         <div className="py-3 px-4 border-t">
-          <label>Number of guests:</label>
+          <label>Number of rooms:</label>
           <input type="number"
-                 value={numberOfGuests}
-                 onChange={ev => setNumberOfGuests(ev.target.value)}/>
+                 min={1}
+                 value={rooms}
+                 onChange={ev => setRooms(Number(ev.target.value))}/>
         </div>
         <div className="py-3 px-4 border-t">
             <label>Your full name:</label>
             <input type="text"
                    value={name}
                    onChange={ev => setName(ev.target.value)}/>
-            <label>Phone number:</label>
-            <input type="tel"
-                   value={phone}
-                   onChange={ev => setPhone(ev.target.value)}/>
+            <PhoneInput isValid={isValid} setIsValid={setIsValid} phone={phone} setPhone={setPhone}/>
         </div>
       </div>
-      <button disabled={!checkIn || !checkOut || !numberOfGuests || !name || !phone} onClick={bookThisPlace} className="primary mt-4">
+      <button disabled={!isValid || !name || !rooms || !checkIn || !checkOut} onClick={bookThisPlace}
+              className={`primary gray mt-4 ${!isValid || !name || !rooms || !checkIn || !checkOut ? 'cursor-no-drop': 'cursor-pointer'}`}>
         Book this room
       </button>
     </div>

@@ -31,11 +31,15 @@ export default function BookingPage() {
       <div className="bg-gray-200 p-6 my-6 rounded-2xl flex items-center justify-between">
         <div>
           <h2 className="text-2xl mb-4">Your booking information:</h2>
-          <BookingDates booking={booking} />
+          <BookingDates booking={booking}/>
+          <span>Address: {booking?.address}</span><br/>
+          <span>Number of Rooms: {booking?.rooms}</span><br/>
+          <span>Name: {booking?.name}</span><br/>
+          <span>Phone: {booking?.phone}</span><br/>
         </div>
         <div className="bg-primary p-6 text-white rounded-2xl">
           <div>Total price</div>
-          <div className="text-3xl">${differenceInCalendarDays(new Date(booking.checkOut), new Date(booking.checkIn)) * booking.price}</div>
+          <div className="text-3xl">${differenceInCalendarDays(new Date(booking.checkOut), new Date(booking.checkIn)) * booking.price * booking.rooms }</div>
         </div>
       </div>
       <PlaceGallery place={booking.place} />

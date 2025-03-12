@@ -28,16 +28,28 @@ export default function PlacePage() {
       <PlaceGallery place={place} />
       <div className="mt-8 mb-8 grid gap-8 grid-cols-1 md:grid-cols-[2fr_1fr]">
         <div>
-          <div className="my-4">
-            <h2 className="font-semibold text-2xl">Description</h2>
-            <div className="whitespace-pre-wrap">{place.description}</div>
+          <div className="p-2 border-2 my-2">
+            <p className="text-center text-2xl font-bold">Room's information</p>
+            Check-in: {place.checkIn}<br/>
+            Check-out: {place.checkOut}<br/>
+            Max number of guests: {place.maxGuests}
+            <div className="my-2">
+              <p className="font-semibold">Description</p>
+              <div className="whitespace-pre-wrap">{place.description}</div>
+            </div>
           </div>
-          Check-in: {place.checkIn}<br />
-          Check-out: {place.checkOut}<br />
-          Max number of guests: {place.maxGuests}
+
+          <hr/>
+          <div className="p-2 border-2 my-2">
+            <p className="text-center text-2xl font-bold">Owner's information of this room</p>
+            Name: {place.name}<br/>
+            Phone: {place.phone}<br/>
+            Email: {place.email}<br/>
+          </div>
+
         </div>
         <div>
-          <BookingWidget place={place} />
+          <BookingWidget place={place}/>
         </div>
       </div>
       <div className="bg-white -mx-8 px-8 py-8 border-t">

@@ -32,10 +32,12 @@ export default function LoginPage() {
           <input type="email"
                  placeholder="your@email.com"
                  value={email}
+                 required
                  onChange={ev => setEmail(ev.target.value)} />
           <input type="password"
                  placeholder="password"
                  value={password}
+                 required
                  onChange={ev => setPassword(ev.target.value)} />
           <button className="primary">Login</button>
           <div className="text-center py-2 text-gray-500">
