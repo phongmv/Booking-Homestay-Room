@@ -183,7 +183,7 @@ app.post('/api/logout', (req, res) => {
 app.post('/api/places', createAsyncHandler(async (req,res) => {
   const {
     title,address,addedPhotos,description,price,
-    perks,extraInfo,checkIn,checkOut,maxGuests,
+    perks,extraInfo,checkIn,checkOut,maxGuests,name, email,phone
   } = req.body;
 
   const userData = await getUserDataFromReq(req);
@@ -191,7 +191,7 @@ app.post('/api/places', createAsyncHandler(async (req,res) => {
   const placeDoc = await Place.create({
     owner:userData.id,price,
     title,address,photos:addedPhotos,description,
-    perks,extraInfo,checkIn,checkOut,maxGuests,
+    perks,extraInfo,checkIn,checkOut,maxGuests,name, email,phone
   });
   res.json(placeDoc);
 }));
@@ -210,13 +210,13 @@ app.put('/api/places', createAsyncHandler(async (req,res) => {
   const userData = await getUserDataFromReq(req);
   const {
     id, title,address,addedPhotos,description,
-    perks,extraInfo,checkIn,checkOut,maxGuests,price,
+    perks,extraInfo,checkIn,checkOut,maxGuests,price,name, email,phone
   } = req.body;
   const placeDoc = await Place.findById(id);
   if (userData.id === placeDoc.owner.toString()) {
     placeDoc.set({
       title,address,photos:addedPhotos,description,
-      perks,extraInfo,checkIn,checkOut,maxGuests,price,
+      perks,extraInfo,checkIn,checkOut,maxGuests,price,name, email,phone
     });
     await placeDoc.save();
     res.json('ok');
@@ -228,7 +228,7 @@ app.put('/api/places', createAsyncHandler(async (req,res) => {
 }));
 
 app.get('/api/places', createAsyncHandler(async (req,res) => {
-  res.json( await Place.find() );
+  res.json( await Place.find());
 }) );
 
 app.post('/api/bookings', createAsyncHandler(async (req, res) => {
@@ -252,11 +252,11 @@ app.post('/api/bookings', createAsyncHandler(async (req, res) => {
 
   // Create the booking
   const {
-    place, checkIn, checkOut, numberOfGuests, name, phone, price,
+    place, checkIn, checkOut, numberOfGuests, name, phone, price, rooms
   } = req.body;
 
   const doc = await Booking.create({
-    place, checkIn, checkOut, numberOfGuests, name, phone, price,
+    place, checkIn, checkOut, numberOfGuests, name, phone, price, rooms,
     user: userData.id,
   });
 
