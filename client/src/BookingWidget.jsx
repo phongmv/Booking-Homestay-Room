@@ -34,6 +34,11 @@ export default function BookingWidget({place}) {
     }
   }, [user]);
 
+  const tomorrow = () => {
+      const today = new Date();
+      today.setDate(today.getDate() + 1); // Set the date to tomorrow
+      return  today.toISOString().split('T')[0]
+  }
 
   async function bookThisPlace() {
     try {
@@ -94,7 +99,7 @@ export default function BookingWidget({place}) {
             <input
               type="date"
               value={checkOut}
-              min={checkIn} // Ngày tối thiểu là ngày Check in
+              min={tomorrow()}
               onChange={ev => setCheckOut(ev.target.value)}
             />
           </div>

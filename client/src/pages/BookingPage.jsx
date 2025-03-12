@@ -47,7 +47,7 @@ export default function BookingPage() {
         <div className="bg-primary p-6 text-white rounded-2xl">
           <div>Total price</div>
           <div
-            className="text-3xl">${differenceInCalendarDays(new Date(booking.checkOut), new Date(booking.checkIn)) * booking.price * booking.rooms}</div>
+            className="text-3xl">${differenceInCalendarDays(new Date(booking.checkOut), new Date(booking.checkIn))  * booking.price * booking.rooms}</div>
         </div>
       </div>
       <PlaceGallery place={booking.place}/>
